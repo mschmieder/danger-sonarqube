@@ -1,0 +1,8 @@
+.DS_Store
+pkg
+.idea/
+.yardoc
+Gemfile.lock
+.vscode
+coverage
+rubocop-result.json
