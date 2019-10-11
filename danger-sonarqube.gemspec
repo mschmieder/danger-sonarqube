@@ -6,7 +6,7 @@ require "sonarqube/gem_version.rb"
 
 Gem::Specification.new do |spec|
   spec.name          = "danger-sonarqube"
-  spec.version       = sonarqube::VERSION
+  spec.version       = Sonarqube::VERSION
   spec.authors       = ["Kyaak"]
   spec.email         = ["kyaak.dev@gmail.com"]
   spec.description   = "A sonarqube report plugin for danger."
@@ -22,7 +22,8 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">=2.2.0"
 
   spec.add_runtime_dependency "danger-plugin-api", "~> 1.0"
-  spec.add_runtime_dependency "oga", "~> 2.15"
+  spec.add_runtime_dependency "httparty", "~> 0.17"
+  spec.add_runtime_dependency "inifile", "~> 3.0.0"
 
   # General ruby development
   spec.add_development_dependency "bundler", ">= 1.3"
@@ -31,8 +32,8 @@ Gem::Specification.new do |spec|
   # Testing support
   spec.add_development_dependency "mocha", "~> 1.2"
   spec.add_development_dependency "rspec", "~> 3.4"
-  #spec.add_development_dependency "simplecov", "~> 0.16"
-  #spec.add_development_dependency "simplecov-console", "~> 0.4"
+  spec.add_development_dependency "simplecov", "~> 0.16"
+  spec.add_development_dependency "simplecov-console", "~> 0.4"
 
   # Linting code and docs
   spec.add_development_dependency "rubocop", "~> 0.60"

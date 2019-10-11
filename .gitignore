@@ -2,7 +2,10 @@
 pkg
 .idea/
 .yardoc
+.pytest_cache
+__pycache__
 Gemfile.lock
 .vscode
 coverage
+vendor
 rubocop-result.json

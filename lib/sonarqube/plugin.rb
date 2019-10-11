@@ -1,209 +1,325 @@
 module Danger
-  # Show code coverage of modified and added files.
-  # Add warnings if minimum file coverage is not achieved.
-  #
-  # @example Warn on minimum file coverage of 30% and show all modified files coverage.
-  #       cobertura.report = "path/to/my/report.xml"
-  #       cobertura.warn_if_file_less_than(percentage: 30)
-  #       cobertura.show_coverage
-  #
-  # @see  Kyaak/danger-cobertura
-  # @tags cobertura, coverage
-  #
-  class DangerSonarqube < Plugin
-    require "oga"
-    require_relative "./coverage_item"
-
-    ERROR_FILE_NOT_SET = "Sonarqube task file not set. Use 'sonarqube.file = \"path/to/my/report-task.txt\"'.".freeze
-    ERROR_FILE_NOT_FOUND = "No file found at %s".freeze
-    TABLE_COLUMN_LINE = "-----".freeze
-
-    # Path to the xml formatted cobertura report.
+    # Show code coverage of modified and added files.
+    # Add warnings if minimum file coverage is not achieved.
     #
-    # @return [String] Task file.
-    attr_accessor :task_file
-    # Array of symbols which allows to extend the markdown report columns.
-    # Allowed symbols: :branch, :line
+    # @example Warn on minimum file coverage of 30% and show all modified files coverage.
+    #       cobertura.report = "path/to/my/report.xml"
+    #       cobertura.warn_if_file_less_than(percentage: 30)
+    #       cobertura.show_coverage
     #
-    # @return [Array<Symbol>] Columns to add in the markdown report.
-    attr_accessor :additional_headers
-    # Path prefix to be added to the cobertura class filename attribute.
+    # @see  mschmieder/danger-sonarqube
+    # @tags sonarqube, static-analysis
     #
-    # @return [String] Prefix to add to filename path.
-    attr_accessor :filename_prefix
+    class DangerSonarqube < Plugin
+        require 'inifile'
+        require 'httparty'
+        require 'uri'
 
-    # Warn if a modified file has a lower total coverage than defined.
-    #
-    # @param percentage [Float] The minimum code coverage required for a file.
-    # @return [Array<String>] Warnings of files with a lower coverage.
-    def warn_if_file_less_than(percentage:)
-      filtered_items.each do |item|
-        next unless item.total_percentage < percentage
+        attr_accessor :task_file
+        attr_accessor :gate_timeout
+        attr_accessor :warn_on_failure
+        attr_accessor :additional_measures
 
-        warn "#{item.name} has less than #{percentage}% coverage"
-      end
-    end
+        ERROR_FILE_NOT_SET = "Sonarqube task file not set. Use 'sonarqube.file = \"path/to/my/report-task.txt\"'.".freeze
+        ERROR_FILE_NOT_FOUND = "No file found at %s".freeze
+        HTTP_ERROR = "HTTP error %s: %s".freeze
+        TIMEOUT_ERROR = "Sonarqube gate did not finish within %s seconds. Set 'gate_timeout' to increase timeout if necessary".freeze
+        TABLE_COLUMN_LINE = "-----".freeze
 
-    # Fail if a modified file has a lower total coverage than defined.
-    #
-    # @param percentage [Float] The minimum code coverage required for a file.
-    # @return [Array<String>] Fail warnings of files with a lower coverage.
-    def fail_if_file_less_than(percentage:)
-      filtered_items.each do |item|
-        next unless item.total_percentage < percentage
+        # API ENDPOINTS
+        GATE_BADGES_ENPOINT = '/api/badges/gate'
+        MEASURE_BADGES_ENPOINT = '/api/badges/measure'
+        PROJECT_ANALYISIS_SEARCH_ENDPINT = '/api/project_analyses/search'
+        QUALITY_GATE_PROJECT_STATUS_ENDPOINT = '/api/qualitygates/project_status'
 
-        fail "#{item.name} has less than #{percentage}% coverage"
-      end
-    end
-
-    # Show markdown table of modified and added files.
-    # TODO remove * wildcard to accept all parameter: `danger local` bug - https://github.com/danger/danger/issues/1041
-    # @return [Array<String>] A markdown report of modified files and their coverage report.
-    def show_coverage(*)
-      return if filtered_items.empty?
-
-      table = "## Code coverage\n".dup
-      table << table_header
-      table << table_separation
-
-      filtered_items.each do |item|
-        table << table_entry(item)
-      end
-      markdown table
-    end
-
-    private
-
-    # Create the show_coverage column headers.
-    #
-    # @return [String] Markdown for table headers.
-    def table_header
-      line = "File|Total".dup
-      line << "|Line" if header_line_rate?
-      line << "|Branch" if header_branch_rate?
-      line << "\n"
-    end
-
-    # Create the show_coverage table header separation line.
-    #
-    # @return [String] Markdown for table header separation.
-    def table_separation
-      line = "#{TABLE_COLUMN_LINE}|#{TABLE_COLUMN_LINE}".dup
-      line << "|#{TABLE_COLUMN_LINE}" if header_line_rate?
-      line << "|#{TABLE_COLUMN_LINE}" if header_branch_rate?
-      line << "\n"
-    end
-
-    # Create the show_coverage table rows.
-    #
-    # @param item [CoverageItem] Coverage item to put information in the table row.
-    # @return [String] Markdown for table rows.
-    def table_entry(item)
-      line = item.name.dup
-      line << "|#{format_coverage(item.total_percentage)}"
-      line << "|#{format_coverage(item.line_rate)}" if header_line_rate?
-      line << "|#{format_coverage(item.branch_rate)}" if header_branch_rate?
-      line << "\n"
-    end
-
-    # Check if additional_headers includes symbol :line
-    #
-    # @return [Boolean] :line header defined.
-    def header_line_rate?
-      !additional_headers.nil? && additional_headers.include?(:line)
-    end
-
-    # Check if additional_headers includes symbol :branch
-    #
-    # @return [Boolean] :branch header defined.
-    def header_branch_rate?
-      !additional_headers.nil? && additional_headers.include?(:branch)
-    end
-
-    # Format coverage output to two decimals.
-    #
-    # @param coverage [Float] Value to format.
-    # @return [String] Formatted coverage string.
-    def format_coverage(coverage)
-      format("%.2f", coverage)
-    end
-
-    # Getter for coverage items of targeted files.
-    # Only coverage items contained in the targeted files list will be returned.
-    #
-    # @return [Array<CoverageItem>] Filtered array of items
-    def filtered_items
-      @filtered_items ||= coverage_items.select do |item|
-        (include_item_prefix?(item) || include_target_prefix?(item)) && !item.name.include?("$")
-      end
-    end
-
-    # Combine item filename with prefix.
-    #
-    # @param item [CoverageItem] Coverage item to create the full filename.
-    # @return [String] Combined filename.
-    def include_item_prefix?(item)
-      prefixed = "".dup
-      if filename_prefix
-        prefixed << filename_prefix
-        prefixed << "/" unless filename_prefix.chars.last == "/"
-      end
-      prefixed << item.filename
-
-      result = false
-      target_files.each do |target_file|
-        result = target_file.eql?(prefixed)
-        break if result
-      end
-      result
-    end
-
-    def include_target_prefix?(item)
-      result = false
-      target_files.each do |target_file|
-        prefixed = "".dup
-        if filename_prefix
-          prefixed << filename_prefix
-          prefixed << "/" unless filename_prefix.chars.last == "/"
+        # attribute to set the path to the sonar report-task file
+        #
+        # @return [String] path to task file.
+        def task_file
+            @task_file || ".sonar/report-task.txt"
         end
-        prefixed << target_file
-        result = prefixed.eql?(item.filename)
-        break if result
-      end
-      result
-    end
 
-    # A getter for current modified and added files.
-    #
-    # @return [Danger::FileList] Wrapper FileList object.
-    def target_files
-      @target_files ||= git.modified_files + git.added_files
-    end
+        # attribute to set the gate timeout
+        #
+        # @return [Integer] time in seconds
+        def gate_timeout
+            @gate_timeout || 360
+        end
 
-    # Parse the defined coverage report file.
-    #
-    # @return [Oga::XML::Document] The root xml object.
-    def parse
-      raise ERROR_FILE_NOT_SET if task_file.nil? || task_file.empty?
-      raise format(ERROR_FILE_NOT_FOUND, task_file) unless File.exist?(task_file)
+        # Instead of failing just warn on a gate failure
+        #
+        # @return [Boolean] true or false
+        def warn_on_failure
+            @warn_on_failure || False
+        end
 
-      Oga.parse_xml(File.read(report))
-    end
+        # This function will wait
+        #
+        # @return [String] task status.
+        def wait_for_quality_gate
+            # wait until the quality gate reports back
+            timeout = 0
+            sleep_time = 10
+            while timeout < gate_timeout do
+                break if sonar_ce_task_status == 'SUCCESS' || sonar_ce_task_status == 'FAILURE'
+                sleep sleep_time
+                timeout += sleep_time
+            end
 
-    # Convenient method to not always parse the report but keep it in the memory.
-    #
-    # @return [Oga::XML::Document] The root xml object.
-    def xml_report
-      @xml_report ||= parse
-    end
+            # check if timout was reached
+            raise format(TIMEOUT_ERROR, gate_timeout) unless timeout < gate_timeout
 
-    # Extract and create all class items from the xml report.
-    #
-    # @return [Array<CoverageItem>] Items with cobertura class information.
-    def coverage_items
-      @coverage_items ||= xml_report.xpath("//class").map do |node|
-        CoverageItem.new(node)
-      end
+            if sonar_ce_task_status == 'FAILURE'
+                message = "Quality gate reported #{sonar_ce_task_status}"
+                if warn_on_failure
+                    warn message
+                else
+                    fail message
+                end
+            end
+        end
+
+        def show_status(*)
+            status = "## Sonarqube\n".dup
+            status << "### Quality Gate\n".dup
+            status << quality_gate_table_header(sonar_gate_badge)
+            status << table_separation
+
+            sonar_project_analysis_quality_gate_event_description.each { |element|
+                status << table_entry(element)
+            }
+            status << "\n"
+
+            status << measure_table_header
+            status << table_separation
+            gate_status = sonar_quality_gate_project_status(sonar_project_key)
+            gate_status['conditions'].each { |condition|
+                if condition['status'] != 'OK'
+                    status << measure_table_entry(sonar_measure_badge(condition['metricKey']),condition['status'])
+                end
+            }
+
+            if additional_measures != nil
+                status << "### Additional Measures\n".dup
+                additional_measures.each do |measure|
+                    status << sonar_measure_badge(measure) << "\n"
+                end
+            end
+
+            markdown status
+        end
+
+        private
+        def parse_task_file
+            raise ERROR_FILE_NOT_SET if task_file.nil? || task_file.empty?
+            raise format(ERROR_FILE_NOT_FOUND, task_file) unless File.exist?(task_file)
+
+            IniFile.load(task_file)
+        end
+
+        # Queries for the current ce task
+        #
+        # @return [String] task status.
+        def sonar_ce_task
+            response = HTTParty.get(basic_auth(sonar_ce_task_url))
+            raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
+            JSON.parse(response.body)['task']
+        end
+
+        # Retrieves the ce task status
+        #
+        # @return [String] task status.
+        def sonar_ce_task_status
+            sonar_ce_task['status']
+        end
+
+        # Retrieves the sonar auth token from the environment
+        #
+        # @return [String] Auth token.
+        def sonar_auth_token
+            ENV['SONAR_AUTH_TOKEN']
+        end
+
+        # Convenient method to not always parse the task file but keep it in the memory.
+        #
+        # @return [IniFile::Hash] The task report object.
+        def sonar_task_report
+            @sonar_task_report ||= parse_task_file
+        end
+
+        # Retrieves the project key from the ini file
+        #
+        # @return [String] The project key url.
+        def sonar_project_key
+            sonar_task_report['global']['projectKey']
+        end
+
+        # Retrieves the server url from the ini file
+        #
+        # @return [String] The server url.
+        def sonar_server_url
+            sonar_task_report['global']['serverUrl']
+        end
+
+        # Retrieves the ce task id from the ini file
+        #
+        # @return [String] The ce task id.
+        def sonar_ce_task_id
+            sonar_task_report['global']['ceTaskId']
+        end
+
+        # Retrieves the task url from the ini file
+        #
+        # @return [String] The ce task url.
+        def sonar_ce_task_url
+            sonar_task_report['global']['ceTaskUrl']
+        end
+
+        # Retrieves the last analysis made on the project
+        #
+        # @return [Hash] structure containing all data about the event
+        def sonar_project_analyses
+            query = {
+                "project"  => sonar_project_key,
+                "category" => "QUALITY_GATE",
+                "ps"       => 1
+            }
+            url = basic_auth("#{sonar_server_url}/#{PROJECT_ANALYISIS_SEARCH_ENDPINT}")
+            response = HTTParty.get(url,
+                :query => query
+            )
+            raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
+            JSON.parse(response.body)["analyses"]
+        end
+
+        # Retrieves the quality gate event
+        #
+        # @return [Hash] structure containing all data about the event
+        def sonar_project_analysis_quality_gate_event
+            analysis = sonar_project_analyses.first
+            event = nil
+            analysis["events"].each { |e|
+                if e["category"] == 'QUALITY_GATE'
+                    event = e
+                    break
+                end
+            }
+            event
+        end
+
+        def sonar_project_analysis_quality_gate_event_description
+            sonar_project_analysis_quality_gate_event["description"].split(',')
+        end
+
+        # Retrieves the svg badge for the quality gate
+        #
+        # @return [String] raw svg string
+        def sonar_gate_badge
+            query = {
+                "key"      => sonar_project_key,
+                "blinking" => "false",
+                "template" => "ROUNDED"
+            }
+            url = basic_auth("#{sonar_server_url}/#{GATE_BADGES_ENPOINT}")
+
+            response = HTTParty.get(url,
+                :query => query
+            )
+            raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
+
+            response.body
+        end
+
+        # Retrieves the svg badge for a given metric
+        #
+        # @param metric metric id to use
+        # @return [String] raw svg string
+        def sonar_measure_badge(metric)
+            query = {
+                "key"      => sonar_project_key,
+                "blinking" => "false",
+                "template" => "ROUNDED",
+                "metric"   => metric
+            }
+            url = basic_auth("#{sonar_server_url}/#{MEASURE_BADGES_ENPOINT}")
+
+            response = HTTParty.get(url,
+                :query => query
+            )
+            raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
+
+            response.body
+        end
+
+        # Retrieves the Quality Gate Project Status
+        #
+        # @param projectKey project key to search for
+        # @return [Hash] structure containing project status
+        def sonar_quality_gate_project_status(projectKey)
+            query = {
+                "projectKey" => projectKey
+            }
+            url = basic_auth("#{sonar_server_url}/#{QUALITY_GATE_PROJECT_STATUS_ENDPOINT}")
+
+            response = HTTParty.get(url,
+                :query => query
+            )
+            raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
+            JSON.parse(response.body)['projectStatus']
+        end
+
+
+        # Adds basic auth user to url
+        #
+        # @param url url that needs to be augmented with basic auth
+        # @return [String] basic auth url.
+        def basic_auth(url)
+            uri = URI.parse(url)
+            if sonar_auth_token
+                uri.user=sonar_auth_token
+            end
+            uri.to_s
+        end
+
+        # Create the table_entry table rows.
+        #
+        # @param item item to put information in the table row.
+        # @return [String] Markdown for table rows.
+        def table_entry(item)
+            line = "||#{item}"
+            line << "\n"
+        end
+
+        # Create the measure_table_entry column headers.
+        #
+        # @return [String] Markdown for table headers.
+        def measure_table_entry(badge, item)
+            line = "|#{badge}|#{item}"
+            line << "\n"
+        end
+
+        # Create the quality_gate_table_header column headers.
+        #
+        # @return [String] Markdown for table headers.
+        def quality_gate_table_header(badge)
+            line = "|#{badge}|Information".dup
+            line << "\n"
+        end
+
+        # Create the table header separation line.
+        #
+        # @return [String] Markdown for table headers.
+        def measure_table_header
+            line = "|Measure|Status".dup
+            line << "\n"
+        end
+
+        # Create the table header separation line.
+        #
+        # @return [String] Markdown for table header separation.
+        def table_separation
+            line = "|#{TABLE_COLUMN_LINE}|#{TABLE_COLUMN_LINE}".dup
+            line << "\n"
+        end
     end
-  end
 end

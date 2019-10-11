@@ -1,3 +1,3 @@
-module Cobertura
-  VERSION = "1.3.0".freeze
+module Sonarqube
+  VERSION = "0.0.1".freeze
 end
