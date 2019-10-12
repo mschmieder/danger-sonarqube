@@ -69,8 +69,8 @@ module Danger
             # check if timout was reached
             raise format(TIMEOUT_ERROR, gate_timeout) unless timeout < gate_timeout
 
-            if sonar_ce_task_status == 'FAILURE'
-                message = "Quality gate reported #{sonar_ce_task_status}"
+            if sonar_quality_gate_project_status(sonar_project_key)['status'] != 'OK'
+                message = "Quality gate reported #{sonar_quality_gate_project_status(sonar_project_key)['status']}"
                 if warn_on_failure
                     warn message
                 else
@@ -81,23 +81,34 @@ module Danger
 
         def show_status(*)
             status = "## Sonarqube\n".dup
-            status << "### Quality Gate\n".dup
-            status << quality_gate_table_header(sonar_gate_badge)
-            status << table_separation
-
-            sonar_project_analysis_quality_gate_event_description.each { |element|
-                status << table_entry(element)
-            }
-            status << "\n"
-
-            status << measure_table_header
-            status << table_separation
-            gate_status = sonar_quality_gate_project_status(sonar_project_key)
-            gate_status['conditions'].each { |condition|
-                if condition['status'] != 'OK'
-                    status << measure_table_entry(sonar_measure_badge(condition['metricKey']),condition['status'])
+            if sonar_quality_gate_project_status(sonar_project_key)['status'] == 'OK'
+                status << sonar_gate_badge
+                status << "\n"
+            else
+                if sonar_project_analysis_quality_gate_event_description != nil
+                    status << quality_gate_table_header(sonar_gate_badge)
+                    status << table_separation
+                    sonar_project_analysis_quality_gate_event_description.each { |element|
+                        status << table_entry(element)
+                    }
                 end
-            }
+                status << "\n"
+
+                measure = measure_table_header
+                measure << table_separation
+                measure_entries = ""
+                gate_status = sonar_quality_gate_project_status(sonar_project_key)
+                gate_status['conditions'].each { |condition|
+                    if condition['status'] != 'OK'
+                        measure_entries << measure_table_entry(sonar_measure_badge(condition['metricKey']), condition['status'])
+                    end
+                }
+
+                if measure_entries != ""
+                    status << measure
+                    status << measure_entries
+                end
+            end
 
             if additional_measures != nil
                 status << "### Additional Measures\n".dup
@@ -196,19 +207,23 @@ module Danger
         #
         # @return [Hash] structure containing all data about the event
         def sonar_project_analysis_quality_gate_event
-            analysis = sonar_project_analyses.first
             event = nil
-            analysis["events"].each { |e|
-                if e["category"] == 'QUALITY_GATE'
-                    event = e
-                    break
+            if !sonar_project_analyses.empty?
+                analysis = sonar_project_analyses.first
+                if analysis.key?("events")
+                    analysis["events"].each { |e|
+                        if e["category"] == 'QUALITY_GATE'
+                            event = e
+                            break
+                        end
+                    }
                 end
-            }
+            end
             event
         end
 
         def sonar_project_analysis_quality_gate_event_description
-            sonar_project_analysis_quality_gate_event["description"].split(',')
+            sonar_project_analysis_quality_gate_event["description"].split(',') unless sonar_project_analysis_quality_gate_event == nil
         end
 
         # Retrieves the svg badge for the quality gate
