@@ -12,6 +12,7 @@ module Danger
     #
     class DangerSonarqube < Plugin
         require 'inifile'
+        require 'fileutils'
         require 'httparty'
         require 'uri'
 
@@ -19,6 +20,7 @@ module Danger
         attr_accessor :gate_timeout
         attr_accessor :warn_on_failure
         attr_accessor :additional_measures
+        attr_accessor :image_dir
 
         ERROR_FILE_NOT_SET = "Sonarqube task file not set. Use 'sonarqube.file = \"path/to/my/report-task.txt\"'.".freeze
         ERROR_FILE_NOT_FOUND = "No file found at %s".freeze
@@ -50,7 +52,14 @@ module Danger
         #
         # @return [Boolean] true or false
         def warn_on_failure
-            @warn_on_failure || False
+            @warn_on_failure || false
+        end
+
+        # Location where the badges will be stored
+        #
+        # @return [String] path to directory
+        def image_dir
+            @image_dir || ".danger/sonarqube/"
         end
 
         # This function will wait
@@ -82,11 +91,11 @@ module Danger
         def show_status(*)
             status = "## Sonarqube\n".dup
             if sonar_quality_gate_project_status(sonar_project_key)['status'] == 'OK'
-                status << sonar_gate_badge
+                status << markdown_image(sonar_gate_badge,"Quality Gate")
                 status << "\n"
             else
                 if sonar_project_analysis_quality_gate_event_description != nil
-                    status << quality_gate_table_header(sonar_gate_badge)
+                    status << quality_gate_table_header(markdown_image(sonar_gate_badge, "Quality Gate"))
                     status << table_separation
                     sonar_project_analysis_quality_gate_event_description.each { |element|
                         status << table_entry(element)
@@ -113,7 +122,7 @@ module Danger
             if additional_measures != nil
                 status << "### Additional Measures\n".dup
                 additional_measures.each do |measure|
-                    status << sonar_measure_badge(measure) << "\n"
+                    status << markdown_image(sonar_measure_badge(measure), measure) << "\n"
                 end
             end
 
@@ -121,6 +130,33 @@ module Danger
         end
 
         private
+
+        # URL to the current project
+        #
+        # @return [String] url to the current project.
+        def ci_project_url
+            url = nil
+            if defined? @dangerfile.gitlab
+                url = ENV['CI_PROJECT_URL']
+            else
+                raise "This plugin does not yet support github or bitbucket, would love PRs: https://github.com/mschmieder/danger-sonarqube/"
+            end
+            url
+        end
+
+        # ID of the current CI job
+        #
+        # @return [String] ci job id
+        def ci_job_id
+            id = nil
+            if defined? @dangerfile.gitlab
+                id = ENV['CI_JOB_ID']
+            else
+                raise "This plugin does not yet support github or bitbucket, would love PRs: https://github.com/mschmieder/danger-sonarqube/"
+            end
+            id
+        end
+
         def parse_task_file
             raise ERROR_FILE_NOT_SET if task_file.nil? || task_file.empty?
             raise format(ERROR_FILE_NOT_FOUND, task_file) unless File.exist?(task_file)
@@ -242,7 +278,14 @@ module Danger
             )
             raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
 
-            response.body
+            save_badge(response.body, "quality_gate")
+        end
+
+        # Markdwon representation of image
+        #
+        # @return [String] markdown an image
+        def markdown_image(url, text)
+            "![#{text}](#{url})"
         end
 
         # Retrieves the svg badge for a given metric
@@ -263,7 +306,26 @@ module Danger
             )
             raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
 
-            response.body
+            save_badge(response.body, metric)
+        end
+
+        # Will save the badge locally and compute the url
+        # where it can be retrieved
+        #
+        # @param metric metric id to use
+        # @return [String] url to retrieve the badge
+        def save_badge(badge, metric)
+            # make sure directory exists
+            dirname = File.dirname(image_dir)
+            unless File.directory?(image_dir)
+              FileUtils.mkdir_p(image_dir)
+            end
+
+            # wirte file
+            File.write("#{image_dir}/#{metric}.svg", badge)
+
+            # compute url
+            url = "${ci_project_url}/-/jobs/${ci_job_id}/artifacts/file/#{image_dir}/#{metric}"
         end
 
         # Retrieves the Quality Gate Project Status
@@ -282,7 +344,6 @@ module Danger
             raise format(HTTP_ERROR, response.code, response.body) unless response.ok?
             JSON.parse(response.body)['projectStatus']
         end
-
 
         # Adds basic auth user to url
         #
