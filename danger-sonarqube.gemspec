@@ -23,11 +23,11 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency "danger-plugin-api", "~> 1.0"
   spec.add_runtime_dependency "httparty", "~> 0.17"
-  spec.add_runtime_dependency "inifile", "~> 3.0.0"
-  spec.add_runtime_dependency "fileutils" "> 1.3.0"
+  spec.add_runtime_dependency "inifile", "~> 3.0"
+  spec.add_runtime_dependency "fileutils", "~> 1.3"
 
   # General ruby development
-  spec.add_development_dependency "bundler", ">= 1.3"
+  spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake", "~> 10.0"
 
   # Testing support
