@@ -109,7 +109,7 @@ module Danger
                 gate_status = sonar_quality_gate_project_status(sonar_project_key)
                 gate_status['conditions'].each { |condition|
                     if condition['status'] != 'OK'
-                        measure_entries << measure_table_entry(sonar_measure_badge(condition['metricKey']), condition['status'])
+                        measure_entries << measure_table_entry(markdown_image(sonar_measure_badge(condition['metricKey']),condition['metricKey']), condition['status'])
                     end
                 }
 
@@ -370,7 +370,7 @@ module Danger
         #
         # @return [String] Markdown for table headers.
         def measure_table_entry(badge, item)
-            line = "|#{badge}|#{item}"
+            line = "|#{item}|#{badge}"
             line << "\n"
         end
 
@@ -378,7 +378,7 @@ module Danger
         #
         # @return [String] Markdown for table headers.
         def quality_gate_table_header(badge)
-            line = "|#{badge}|Information".dup
+            line = "|Information|#{badge}".dup
             line << "\n"
         end
 
