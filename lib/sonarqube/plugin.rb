@@ -325,7 +325,7 @@ module Danger
             File.write("#{image_dir}/#{metric}.svg", badge)
 
             # compute url
-            url = "${ci_project_url}/-/jobs/${ci_job_id}/artifacts/file/#{image_dir}/#{metric}"
+            url = "#{ci_project_url}/-/jobs/#{ci_job_id}/artifacts/file/#{image_dir}/#{metric}.svg"
         end
 
         # Retrieves the Quality Gate Project Status
