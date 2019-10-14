@@ -108,11 +108,6 @@ module Danger
                 gate_status['conditions'].each { |condition|
                     status << markdown_image(sonar_measure_badge(condition['metricKey']),condition['metricKey']) << "\n"
                 }
-
-                if measure_entries != ""
-                    status << measure
-                    status << measure_entries
-                end
             end
 
             if additional_measures != nil
