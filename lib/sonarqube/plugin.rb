@@ -103,14 +103,10 @@ module Danger
                 end
                 status << "\n"
 
-                measure = measure_table_header
-                measure << table_separation
-                measure_entries = ""
                 gate_status = sonar_quality_gate_project_status(sonar_project_key)
+                status << "### Quality Gate Conditions\n".dup
                 gate_status['conditions'].each { |condition|
-                    if condition['status'] != 'OK'
-                        measure_entries << measure_table_entry(markdown_image(sonar_measure_badge(condition['metricKey']),condition['metricKey']), condition['status'])
-                    end
+                    status << markdown_image(sonar_measure_badge(condition['metricKey']),condition['metricKey']) << "\n"
                 }
 
                 if measure_entries != ""
@@ -362,7 +358,7 @@ module Danger
         # @param item item to put information in the table row.
         # @return [String] Markdown for table rows.
         def table_entry(item)
-            line = "||#{item}"
+            line = "|#{item}|"
             line << "\n"
         end
 
