@@ -1,1 +1,1 @@
-require "cobertura/gem_version"
+require "sonarqube/gem_version"
