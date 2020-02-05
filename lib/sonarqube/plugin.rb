@@ -29,10 +29,10 @@ module Danger
         TABLE_COLUMN_LINE = "-----".freeze
 
         # API ENDPOINTS
-        GATE_BADGES_ENPOINT = '/api/badges/gate'
-        MEASURE_BADGES_ENPOINT = '/api/badges/measure'
-        PROJECT_ANALYISIS_SEARCH_ENDPINT = '/api/project_analyses/search'
-        QUALITY_GATE_PROJECT_STATUS_ENDPOINT = '/api/qualitygates/project_status'
+        GATE_BADGES_ENPOINT = 'api/badges/gate'
+        MEASURE_BADGES_ENPOINT = 'api/badges/measure'
+        PROJECT_ANALYISIS_SEARCH_ENDPINT = 'api/project_analyses/search'
+        QUALITY_GATE_PROJECT_STATUS_ENDPOINT = 'api/qualitygates/project_status'
 
         # attribute to set the path to the sonar report-task file
         #
@@ -196,7 +196,8 @@ module Danger
         #
         # @return [String] The server url.
         def sonar_server_url
-            sonar_task_report['global']['serverUrl']
+            url = sonar_task_report['global']['serverUrl']
+            url.gsub('/$', '')
         end
 
         # Retrieves the ce task id from the ini file
@@ -328,7 +329,8 @@ module Danger
                 "projectKey" => projectKey
             }
             url = basic_auth("#{sonar_server_url}/#{QUALITY_GATE_PROJECT_STATUS_ENDPOINT}")
-
+            puts url
+            puts query
             response = HTTParty.get(url,
                 :query => query
             )

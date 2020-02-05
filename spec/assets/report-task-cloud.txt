@@ -1,0 +1,7 @@
+organization=strykerdps
+projectKey=rhs:tprc-pro
+serverUrl=https://sonarcloud.io
+serverVersion=8.0.0.4383
+dashboardUrl=https://sonarcloud.io/dashboard?id=rhs%3Atprc-pro&branch=adding-surgical-case-edit&resolved=false
+ceTaskId=AXAVh9xLQ2MSDLemjxo8
+ceTaskUrl=https://sonarcloud.io/api/ce/task?id=AXAVh9xLQ2MSDLemjxo8
