@@ -69,6 +69,7 @@ module Danger
             # wait until the quality gate reports back
             timeout = 0
             sleep_time = 10
+            #puts sonar_ce_task
             while timeout < gate_timeout do
                 break if sonar_ce_task_status == 'SUCCESS' || sonar_ce_task_status == 'FAILURE'
                 sleep sleep_time
@@ -77,8 +78,8 @@ module Danger
 
             # check if timout was reached
             raise format(TIMEOUT_ERROR, gate_timeout) unless timeout < gate_timeout
-
-            if sonar_quality_gate_project_status(sonar_project_key)['status'] != 'OK'
+            #puts sonar_quality_gate_project_status(sonar_project_key)
+            if sonar_quality_gate_project_status(sonar_project_key)['status'] != 'OK' && sonar_quality_gate_project_status(sonar_project_key)['status'] != 'NONE' #Happens with QualityGates that don't have anything to check for
                 message = "Quality gate reported #{sonar_quality_gate_project_status(sonar_project_key)['status']}"
                 if warn_on_failure
                     warn message
@@ -90,7 +91,7 @@ module Danger
 
         def show_status(*)
             status = "## Sonarqube\n".dup
-            if sonar_quality_gate_project_status(sonar_project_key)['status'] == 'OK'
+            if sonar_quality_gate_project_status(sonar_project_key)['status'] == 'OK' || sonar_quality_gate_project_status(sonar_project_key)['status'] == 'NONE' #Happens with QualityGates that don't have anything to check for
                 status << markdown_image(sonar_gate_badge,"Quality Gate")
                 status << "\n"
             else

@@ -12,14 +12,14 @@ module Danger
       before do
         @dangerfile = testing_dangerfile
         @my_plugin = @dangerfile.sonarqube
-        @my_plugin.task_file = "#{File.dirname(__FILE__)}/assets/report-task.txt"
+        @my_plugin.task_file = "#{File.dirname(__FILE__)}/assets/report-task-cloud.txt"
         @dangerfile.git.stubs(:modified_files).returns([])
         @dangerfile.git.stubs(:added_files).returns([])
       end
 
       it "test" do
         @my_plugin.wait_for_quality_gate
-        @my_plugin.show_status
+        #@my_plugin.show_status
       end
 
     end
